@@ -1,0 +1,37 @@
+{
+    "name": "localzet/storage",
+    "description": "Localzet Storage is a global storage library developed by Ivan Zorin. It provides functionality for storing and retrieving data across different parts of an application, ensuring consistency and reliability.",
+    "type": "library",
+    "keywords": [
+        "storage",
+        "global",
+        "PHP",
+        "library",
+        "localzet",
+        "AGPL",
+        "data"
+    ],
+    "license": "AGPL-3.0-or-later",
+    "authors": [
+        {
+            "role": "Developer",
+            "name": "Ivan Zorin",
+            "email": "creator@localzet.com",
+            "homepage": "https://github.com/localzet"
+        }
+    ],
+    "support": {
+        "email": "support@localzet.com",
+        "issues": "https://github.com/localzet/Storage/issues",
+        "source": "https://github.com/localzet/Storage"
+    },
+    "require": {
+        "php": "^8.2",
+        "localzet/server": "^4.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "localzet\\Storage\\": "src/"
+        }
+    }
+}
