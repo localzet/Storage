@@ -67,12 +67,12 @@ class Client
             }
 
             stream_set_timeout($connection, $this->timeout);
-            if (class_exists('\localzet\Server\Timer') && php_sapi_name() === 'cli') {
-                $timer_id = \localzet\Server\Timer::add($this->pingInterval, function ($connection) use (&$timer_id) {
+            if (class_exists('\localzet\Timer') && php_sapi_name() === 'cli') {
+                $timer_id = \localzet\Timer::add($this->pingInterval, function ($connection) use (&$timer_id) {
                     $buffer = pack('N', 8) . "ping";
                     if (strlen($buffer) !== @fwrite($connection, $buffer)) {
                         @fclose($connection);
-                        \localzet\Server\Timer::del($timer_id);
+                        \localzet\Timer::del($timer_id);
                     }
                 }, array($connection));
             }
