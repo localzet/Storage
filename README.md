@@ -8,12 +8,12 @@ A client/server shared in-memory data store for Localzet Server applications.
 
 The transport uses PHP serialization. Keep its ports on a trusted network; untrusted input, object deserialization, frame bounds, concurrent operations and recovery require review before deployment.
 
-This is a Server 4.x component; Server 7.x compatibility is not established.
+The component targets Server 7.x. The server binds to loopback by default and has no client authentication; use it only on a trusted network and explicitly configure any non-loopback bind behind network access controls. PHP object deserialization is disabled by default when reading network data. For a trusted, isolated network, enable it explicitly with `new Server($ip, $port, allowObjectSerialization: true)` and `new Client($servers, allowObjectSerialization: true)`. Do not enable this mode for untrusted clients.
 
 ## Dependencies
 
 - `php`: `^8.2`
-- `localzet/server`: `^4.1`
+- `localzet/server`: `^7.0`
 
 ## Installation
 

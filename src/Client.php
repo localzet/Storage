@@ -1,4 +1,27 @@
 <?php
+/**
+ * @package     Localzet Storage
+ * @link        https://github.com/localzet/Storage
+ *
+ * @author      Ivan Zorin <creator@localzet.com>
+ * @copyright   Copyright © 2016-2026 Localzet Group. All rights reserved.
+ * @license     https://www.gnu.org/licenses/agpl-3.0 GNU Affero General Public License v3.0
+ *
+ *              This program is free software: you can redistribute it and/or modify
+ *              it under the terms of the GNU Affero General Public License as published
+ *              by the Free Software Foundation, either version 3 of the License, or
+ *              (at your option) any later version.
+ *
+ *              This program is distributed in the hope that it will be useful,
+ *              but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *              MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ *              GNU Affero General Public License for more details.
+ *
+ *              You should have received a copy of the GNU Affero General Public License
+ *              along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ *              For any questions, please contact <creator@localzet.com>
+*/
 
 namespace localzet\Storage;
 
@@ -7,6 +30,8 @@ namespace localzet\Storage;
  */
 class Client
 {
+    /** @var bool */
+    private bool $allowObjectSerialization;
     /**
      * Таймаут
      * @var int
@@ -40,13 +65,14 @@ class Client
     /**
      * @param array|string $servers
      */
-    public function __construct($servers)
+    public function __construct($servers, bool $allowObjectSerialization = false)
     {
         if (empty($servers)) {
             throw new \Exception('Адрес хранилища пуст');
         }
 
         $this->_globalServers = array_values((array)$servers);
+        $this->allowObjectSerialization = $allowObjectSerialization;
     }
 
     /**
@@ -123,7 +149,7 @@ class Client
                 $head_read = true;
             }
         }
-        return unserialize(substr($all_buffer, 4));
+        return unserialize(substr($all_buffer, 4), ['allowed_classes' => $this->allowObjectSerialization]);
     }
 
     /**-------------------------------------------------------------------------------------------------- */
