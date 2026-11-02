@@ -33,5 +33,15 @@
     "psr-4": {
       "localzet\\Storage\\": "src/"
     }
+  },
+  "scripts": {
+    "lint": "find src tests -name '*.php' -print0 | xargs -0 -n1 php -l",
+    "test": "php tests/security_regression.php",
+    "test:integration": "php tests/integration.php",
+    "check": [
+      "@lint",
+      "@test",
+      "@test:integration"
+    ]
   }
 }
