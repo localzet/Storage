@@ -30,6 +30,8 @@ namespace localzet\Storage;
  */
 class Client
 {
+    private const MAX_FRAME_SIZE = 64 * 1024 * 1024;
+
     /** @var bool */
     private bool $allowObjectSerialization;
     /**
@@ -114,10 +116,20 @@ class Client
     protected function write($data, $connection)
     {
         $buffer = serialize($data);
-        $buffer = pack('N', 4 + strlen($buffer)) . $buffer;
-        $len = fwrite($connection, $buffer);
-        if ($len !== strlen($buffer)) {
-            throw new \Exception('write fail');
+        $length = strlen($buffer);
+        if ($length === 0 || $length > self::MAX_FRAME_SIZE) {
+            throw new \LengthException('Storage frame size is invalid.');
+        }
+
+        $buffer = pack('N', $length) . $buffer;
+        $offset = 0;
+        $bufferLength = strlen($buffer);
+        while ($offset < $bufferLength) {
+            $written = fwrite($connection, substr($buffer, $offset));
+            if ($written === false || $written === 0) {
+                throw new \RuntimeException('Storage frame write failed.');
+            }
+            $offset += $written;
         }
     }
 
@@ -127,29 +139,30 @@ class Client
      */
     protected function read($connection)
     {
-        $all_buffer = '';
-        $total_len = 4;
-        $head_read = false;
-        while (1) {
-            $buffer = fread($connection, 8192);
-            if ($buffer === '' || $buffer === false) {
-                throw new \Exception('read fail');
-            }
-            $all_buffer .= $buffer;
-            $recv_len = strlen($all_buffer);
-            if ($recv_len >= $total_len) {
-                if ($head_read) {
-                    break;
-                }
-                $unpack_data = unpack('Ntotal_length', $all_buffer);
-                $total_len = $unpack_data['total_length'];
-                if ($recv_len >= $total_len) {
-                    break;
-                }
-                $head_read = true;
-            }
+        $header = $this->readExact($connection, 4);
+        $length = unpack('Nlength', $header)['length'];
+        if ($length === 0 || $length > self::MAX_FRAME_SIZE) {
+            throw new \LengthException('Storage frame size is invalid.');
         }
-        return unserialize(substr($all_buffer, 4), ['allowed_classes' => $this->allowObjectSerialization]);
+
+        $payload = $this->readExact($connection, $length);
+        return unserialize($payload, ['allowed_classes' => $this->allowObjectSerialization]);
+    }
+
+    private function readExact($connection, int $length): string
+    {
+        $buffer = '';
+        while (strlen($buffer) < $length) {
+            $chunk = fread($connection, $length - strlen($buffer));
+            if ($chunk === false || $chunk === '') {
+                $metadata = stream_get_meta_data($connection);
+                $reason = ($metadata['timed_out'] ?? false) ? 'timed out' : 'closed before the frame was complete';
+                throw new \RuntimeException('Storage frame read ' . $reason . '.');
+            }
+            $buffer .= $chunk;
+        }
+
+        return $buffer;
     }
 
     /**-------------------------------------------------------------------------------------------------- */

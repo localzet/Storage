@@ -38,6 +38,19 @@ final class StorageWakeupProbe
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
+final class StorageClientProbe extends Client
+{
+    public function writeFrame(array $data, $connection): void
+    {
+        $this->write($data, $connection);
+    }
+
+    public function readFrame($connection): mixed
+    {
+        return $this->read($connection);
+    }
+}
+
 $client = new Client('127.0.0.1:8008');
 $clientProperty = new ReflectionProperty($client, 'allowObjectSerialization');
 $clientProperty->setAccessible(true);
@@ -80,4 +93,22 @@ if ($serverProperty->getValue($trustedServer) !== true) {
     throw new RuntimeException('Server trusted-network opt-in was not retained.');
 }
 
-echo "Storage serialization policy regressions passed.\n";
+[$clientSocket, $serverSocket] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+$frameClient = new StorageClientProbe('127.0.0.1:8008');
+$request = ['cmd' => 'set', 'key' => 'frame', 'value' => 'payload'];
+$frameClient->writeFrame($request, $clientSocket);
+$frame = fread($serverSocket, 65536);
+$frameLength = unpack('Nlength', substr($frame, 0, 4))['length'];
+if ($frameLength !== strlen($frame) - 4 || substr($frame, 4) !== serialize($request)) {
+    throw new RuntimeException('Storage client frame length must describe only the payload.');
+}
+
+$response = serialize(['ok' => true]);
+fwrite($serverSocket, pack('N', strlen($response)) . $response);
+if ($frameClient->readFrame($clientSocket) !== ['ok' => true]) {
+    throw new RuntimeException('Storage client failed to decode a Server 7 frame.');
+}
+
+fclose($clientSocket);
+fclose($serverSocket);
+echo "Storage serialization and frame regressions passed.\n";
