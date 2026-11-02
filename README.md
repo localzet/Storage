@@ -18,8 +18,11 @@ The component targets Server 7.x. The server binds to loopback by default and ha
 ## Installation
 
 ```sh
-composer require localzet/storage
+composer config repositories.localzet-storage vcs https://github.com/localzet/Storage
+composer require localzet/storage:dev-main
 ```
+
+The package is not published on Packagist yet; this VCS source installs the current Server 7 branch.
 
 ## Development checks
 

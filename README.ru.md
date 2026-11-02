@@ -18,8 +18,11 @@
 ## Установка
 
 ```sh
-composer require localzet/storage
+composer config repositories.localzet-storage vcs https://github.com/localzet/Storage
+composer require localzet/storage:dev-main
 ```
+
+Пакет пока не опубликован в Packagist; указанный VCS source устанавливает текущую ветку Server 7.
 
 ## Проверки разработки
 
