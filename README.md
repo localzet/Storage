@@ -6,6 +6,8 @@ A client/server shared in-memory data store for Localzet Server applications.
 
 ## Status and compatibility
 
+Current release: `1.0.2`. The package targets Localzet Server 7 and fixes client framing for partial header/body reads and writes. Object deserialization from network data stays disabled by default; enable it only on a trusted, isolated network.
+
 The transport uses PHP serialization inside length-prefixed frames (maximum payload: 64 MiB). Keep its ports on a trusted network. The store is in-memory and process-local: it has no persistence, replication, client authentication or concurrency control.
 
 The component targets Server 7.x. The server binds to loopback by default and has no client authentication; use it only on a trusted network and explicitly configure any non-loopback bind behind network access controls. PHP object deserialization is disabled by default when reading network data. For a trusted, isolated network, enable it explicitly with `new Server($ip, $port, allowObjectSerialization: true)` and `new Client($servers, allowObjectSerialization: true)`. Do not enable this mode for untrusted clients.
@@ -19,10 +21,10 @@ The component targets Server 7.x. The server binds to loopback by default and ha
 
 ```sh
 composer config repositories.localzet-storage vcs https://github.com/localzet/Storage
-composer require localzet/storage:dev-main
+composer require localzet/storage:^1.0
 ```
 
-The package is not published on Packagist yet; this VCS source installs the current Server 7 branch.
+The package is not published on Packagist yet; Composer resolves the stable `1.x` tags from this VCS source.
 
 ## Quick start
 
