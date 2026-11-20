@@ -6,11 +6,11 @@ A client/server shared in-memory data store for Localzet Server applications.
 
 ## Status and compatibility
 
-Current release: `1.0.2`. The package targets Localzet Server 7 and fixes client framing for partial header/body reads and writes. Object deserialization from network data stays disabled by default; enable it only on a trusted, isolated network.
+Current release: `1.0.2`. The package targets Localzet Server 7 and fixes client framing for partial header/body reads and writes. By default, network payloads may contain scalars and acyclic arrays only; object values and recursive arrays are rejected.
 
 The transport uses PHP serialization inside length-prefixed frames (maximum payload: 64 MiB). Keep its ports on a trusted network. The store is in-memory and process-local: it has no persistence, replication, client authentication or concurrency control.
 
-The component targets Server 7.x. The server binds to loopback by default and has no client authentication; use it only on a trusted network and explicitly configure any non-loopback bind behind network access controls. PHP object deserialization is disabled by default when reading network data. For a trusted, isolated network, enable it explicitly with `new Server($ip, $port, allowObjectSerialization: true)` and `new Client($servers, allowObjectSerialization: true)`. Do not enable this mode for untrusted clients.
+The component targets Server 7.x. The server binds to loopback by default and has no client authentication; use it only on a trusted network and explicitly configure any non-loopback bind behind network access controls. When object support is disabled, the server and client reject PHP object values, including `__PHP_Incomplete_Class`, and recursive arrays. For a trusted, isolated network, enable object serialization explicitly on both peers with `new Server($ip, $port, allowObjectSerialization: true)` and `new Client($servers, allowObjectSerialization: true)`. Do not enable this mode for untrusted clients.
 
 ## Dependencies
 
@@ -52,7 +52,7 @@ $storage->set('greeting', 'hello');
 $greeting = $storage->get('greeting');
 ```
 
-Both sides must use the same compatible Server 7 framing. PHP objects are disabled during network deserialization by default; only enable the constructor opt-in when every peer is trusted.
+Both sides must use the same compatible Server 7 framing. By default, PHP serialized payloads contain only scalars and acyclic arrays; only enable the constructor opt-in when every peer is trusted.
 
 ## Development checks
 

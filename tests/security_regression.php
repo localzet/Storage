@@ -24,6 +24,7 @@
 */
 
 use localzet\Storage\Client;
+use localzet\Storage\SerializationGuard;
 use localzet\Storage\Server;
 
 final class StorageWakeupProbe
@@ -84,17 +85,76 @@ $server->onMessage($connection, serialize([
     'key' => 'probe',
     'value' => new StorageWakeupProbe(),
 ]));
+$dataProperty = new ReflectionProperty($server, '_dataArray');
+$dataProperty->setAccessible(true);
+if (StorageWakeupProbe::$wokeUp || isset($dataProperty->getValue($server)['probe'])) {
+    throw new RuntimeException('Untrusted object payload must not execute hooks or enter Storage.');
+}
+
+$server->onMessage($connection, serialize([
+    'cmd' => 'set',
+    'key' => 'nested-probe',
+    'value' => ['nested' => new StorageWakeupProbe()],
+]));
+if (isset($dataProperty->getValue($server)['nested-probe'])) {
+    throw new RuntimeException('Nested untrusted object payload must not enter Storage.');
+}
+
+$server->onMessage($connection, serialize(new StorageWakeupProbe()));
 if (StorageWakeupProbe::$wokeUp) {
-    throw new RuntimeException('Untrusted serialized object hooks must not execute.');
+    throw new RuntimeException('Root untrusted object payload must not execute hooks.');
+}
+
+$acceptedValues = ['scalar' => 'value', 'number' => 42, 'nested' => ['null' => null, 'flag' => true]];
+$server->onMessage($connection, serialize([
+    'cmd' => 'set',
+    'key' => 'accepted',
+    'value' => $acceptedValues,
+]));
+if (($dataProperty->getValue($server)['accepted'] ?? null) !== $acceptedValues) {
+    throw new RuntimeException('Scalar and nested-array payloads must remain supported.');
+}
+
+$cyclic = [];
+$cyclic['self'] =& $cyclic;
+if (SerializationGuard::supports($cyclic)) {
+    throw new RuntimeException('Recursive arrays must be rejected without recursive traversal.');
+}
+$server->onMessage($connection, serialize([
+    'cmd' => 'set',
+    'key' => 'cycle',
+    'value' => $cyclic,
+]));
+if (isset($dataProperty->getValue($server)['cycle'])) {
+    throw new RuntimeException('Storage server must reject recursive arrays.');
 }
 
 $trustedServer = new Server('127.0.0.1', 8008, allowObjectSerialization: true);
 if ($serverProperty->getValue($trustedServer) !== true) {
     throw new RuntimeException('Server trusted-network opt-in was not retained.');
 }
+$trustedServer->onMessage($connection, serialize([
+    'cmd' => 'set',
+    'key' => 'trusted-object',
+    'value' => new StorageWakeupProbe(),
+]));
+$trustedValue = $dataProperty->getValue($trustedServer)['trusted-object'] ?? null;
+if (!StorageWakeupProbe::$wokeUp || !($trustedValue instanceof StorageWakeupProbe)) {
+    throw new RuntimeException('Trusted-network opt-in must preserve object payload compatibility.');
+}
 
 [$clientSocket, $serverSocket] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
 $frameClient = new StorageClientProbe('127.0.0.1:8008');
+$rejectedObject = false;
+try {
+    $frameClient->writeFrame(['cmd' => 'set', 'key' => 'object', 'value' => new StorageWakeupProbe()], $clientSocket);
+} catch (InvalidArgumentException) {
+    $rejectedObject = true;
+}
+if (!$rejectedObject) {
+    throw new RuntimeException('Storage client must reject object payloads without opt-in.');
+}
+
 $request = ['cmd' => 'set', 'key' => 'frame', 'value' => 'payload'];
 $frameClient->writeFrame($request, $clientSocket);
 $frame = fread($serverSocket, 65536);
@@ -107,6 +167,26 @@ $response = serialize(['ok' => true]);
 fwrite($serverSocket, pack('N', strlen($response)) . $response);
 if ($frameClient->readFrame($clientSocket) !== ['ok' => true]) {
     throw new RuntimeException('Storage client failed to decode a Server 7 frame.');
+}
+
+$response = serialize(['nested' => new StorageWakeupProbe()]);
+fwrite($serverSocket, pack('N', strlen($response)) . $response);
+$rejectedResponse = false;
+try {
+    $frameClient->readFrame($clientSocket);
+} catch (UnexpectedValueException) {
+    $rejectedResponse = true;
+}
+if (!$rejectedResponse) {
+    throw new RuntimeException('Storage client must reject object responses without opt-in.');
+}
+
+$trustedFrameClient = new StorageClientProbe('127.0.0.1:8008', allowObjectSerialization: true);
+$response = serialize(['nested' => new StorageWakeupProbe()]);
+fwrite($serverSocket, pack('N', strlen($response)) . $response);
+$trustedResponse = $trustedFrameClient->readFrame($clientSocket);
+if (!($trustedResponse['nested'] instanceof StorageWakeupProbe)) {
+    throw new RuntimeException('Storage client trusted-network opt-in must preserve object responses.');
 }
 
 fclose($clientSocket);

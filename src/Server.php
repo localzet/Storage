@@ -75,6 +75,9 @@ class Server
         } catch (\Throwable) {
             return $connection->close(serialize('bad request'));
         }
+        if (!$this->allowObjectSerialization && !SerializationGuard::supports($data)) {
+            return $connection->close(serialize('bad request'));
+        }
         if (!$buffer || !is_array($data) || !isset($data['cmd']) || !isset($data['key'])) {
             // В запресе должны быть 'cmd' и 'key'
             return $connection->close(serialize('bad request'));

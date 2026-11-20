@@ -115,6 +115,10 @@ class Client
      */
     protected function write($data, $connection)
     {
+        if (!$this->allowObjectSerialization && !SerializationGuard::supports($data)) {
+            throw new \InvalidArgumentException('Storage payload must contain only scalars and acyclic arrays.');
+        }
+
         $buffer = serialize($data);
         $length = strlen($buffer);
         if ($length === 0 || $length > self::MAX_FRAME_SIZE) {
@@ -146,7 +150,13 @@ class Client
         }
 
         $payload = $this->readExact($connection, $length);
-        return unserialize($payload, ['allowed_classes' => $this->allowObjectSerialization]);
+        $data = unserialize($payload, ['allowed_classes' => $this->allowObjectSerialization]);
+
+        if (!$this->allowObjectSerialization && !SerializationGuard::supports($data)) {
+            throw new \UnexpectedValueException('Storage response contains an unsupported value.');
+        }
+
+        return $data;
     }
 
     private function readExact($connection, int $length): string
