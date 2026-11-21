@@ -70,12 +70,16 @@ class Server
         if ($buffer === 'ping') {
             return;
         }
+        if (!$this->allowObjectSerialization && !SerializationGuard::supportsSerializedRequest($buffer)) {
+            return $connection->close(serialize('bad request'));
+        }
+
         try {
-            $data = unserialize($buffer, ['allowed_classes' => $this->allowObjectSerialization]);
+            $data = SerializationGuard::decode($buffer, $this->allowObjectSerialization);
         } catch (\Throwable) {
             return $connection->close(serialize('bad request'));
         }
-        if (!$this->allowObjectSerialization && !SerializationGuard::supports($data)) {
+        if (!$this->allowObjectSerialization && !SerializationGuard::supportsRequest($data)) {
             return $connection->close(serialize('bad request'));
         }
         if (!$buffer || !is_array($data) || !isset($data['cmd']) || !isset($data['key'])) {

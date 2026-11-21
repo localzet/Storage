@@ -115,7 +115,7 @@ class Client
      */
     protected function write($data, $connection)
     {
-        if (!$this->allowObjectSerialization && !SerializationGuard::supports($data)) {
+        if (!$this->allowObjectSerialization && !SerializationGuard::supportsRequest($data)) {
             throw new \InvalidArgumentException('Storage payload must contain only scalars and acyclic arrays.');
         }
 
@@ -150,7 +150,11 @@ class Client
         }
 
         $payload = $this->readExact($connection, $length);
-        $data = unserialize($payload, ['allowed_classes' => $this->allowObjectSerialization]);
+        if (!$this->allowObjectSerialization && !SerializationGuard::supportsSerializedValue($payload)) {
+            throw new \UnexpectedValueException('Storage response contains an unsupported value.');
+        }
+
+        $data = SerializationGuard::decode($payload, $this->allowObjectSerialization);
 
         if (!$this->allowObjectSerialization && !SerializationGuard::supports($data)) {
             throw new \UnexpectedValueException('Storage response contains an unsupported value.');
