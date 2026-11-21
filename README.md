@@ -6,7 +6,7 @@ A client/server shared in-memory data store for Localzet Server applications.
 
 ## Status and compatibility
 
-Current release: `2.0.0`. The package targets Localzet Server 7 and fixes client framing for partial header/body reads and writes. Version 2 changes the default payload contract: object values and recursive arrays are rejected, while scalars and acyclic arrays remain supported. Version 1 clients that send PHP objects must migrate before upgrading.
+Current release: `2.0.1`. The package targets Localzet Server 7 and fixes client framing for partial header/body reads and writes. Version 2 changes the default payload contract: object values and recursive arrays are rejected, while scalars and acyclic arrays remain supported. Version 2.0.1 validates bounded payload structure before decoding. Version 1 clients that send PHP objects must migrate before upgrading.
 
 The transport uses PHP serialization inside length-prefixed frames (maximum payload: 64 MiB). In the default safe mode, validation rejects values with more than 100,000 array entries across the whole value tree or more than 128 nested array levels. Keep its ports on a trusted network. The store is in-memory and process-local: it has no persistence, replication, client authentication or concurrency control.
 
