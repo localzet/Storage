@@ -37,6 +37,14 @@ final class StorageWakeupProbe
     }
 }
 
+final class StorageWakeupWarningProbe
+{
+    public function __wakeup(): void
+    {
+        trigger_error('trusted wakeup warning', E_USER_WARNING);
+    }
+}
+
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 final class StorageClientProbe extends Client
@@ -115,10 +123,123 @@ if (($dataProperty->getValue($server)['accepted'] ?? null) !== $acceptedValues) 
     throw new RuntimeException('Scalar and nested-array payloads must remain supported.');
 }
 
+$serializedValues = [
+    null,
+    false,
+    PHP_INT_MIN,
+    1.25,
+    NAN,
+    INF,
+    -INF,
+    "quote\"; brace{} and NUL\0 byte",
+    ['nested' => [1, 2.5, false]],
+];
+foreach ($serializedValues as $value) {
+    if (!SerializationGuard::supportsSerializedValue(serialize($value))) {
+        throw new RuntimeException('Serialized scalar and array values must pass preflight.');
+    }
+}
+if (SerializationGuard::supportsSerializedValue(serialize(new StorageWakeupProbe()))) {
+    throw new RuntimeException('Serialized object payloads must fail preflight before decoding.');
+}
+foreach (['', 'i:1', 'a:1:{i:0;O:8:"stdClass":0:{}}'] as $invalidPayload) {
+    if (SerializationGuard::supportsSerializedValue($invalidPayload)) {
+        throw new RuntimeException('Malformed or object payloads must fail serialization preflight.');
+    }
+}
+
+$malformedReference = 'a:3:{s:3:"cmd";s:3:"set";s:3:"key";s:1:"x";s:5:"value";R:999;}';
+$warnings = [];
+set_error_handler(static function (int $severity, string $message) use (&$warnings): bool {
+    $warnings[] = $message;
+
+    return true;
+});
+try {
+    $server->onMessage($connection, $malformedReference);
+} finally {
+    restore_error_handler();
+}
+if ($warnings !== [] || end($connection->sent) !== serialize('bad request')) {
+    throw new RuntimeException('Malformed references must be rejected without emitting PHP warnings.');
+}
+
 $cyclic = [];
 $cyclic['self'] =& $cyclic;
 if (SerializationGuard::supports($cyclic)) {
     throw new RuntimeException('Recursive arrays must be rejected without recursive traversal.');
+}
+$shared = ['value' => 'shared'];
+$sharedAcyclicValues = [];
+$sharedAcyclicValues['first'] =& $shared;
+$sharedAcyclicValues['second'] =& $shared;
+if (!SerializationGuard::supports($sharedAcyclicValues)) {
+    throw new RuntimeException('Repeated acyclic references must remain supported.');
+}
+$atValueLimit = range(1, 100_000);
+if (!SerializationGuard::supports($atValueLimit)) {
+    throw new RuntimeException('Arrays within the validation value limit must remain supported.');
+}
+$requestAtValueLimit = ['cmd' => 'set', 'key' => 'at-limit', 'value' => $atValueLimit];
+if (!SerializationGuard::supportsRequest($requestAtValueLimit)
+    || !SerializationGuard::supportsSerializedRequest(serialize($requestAtValueLimit))
+) {
+    throw new RuntimeException('Storage requests within the value limit must remain supported.');
+}
+$tooManyValues = range(1, 100_001);
+if (SerializationGuard::supports($tooManyValues)) {
+    throw new RuntimeException('Arrays over the validation value limit must be rejected.');
+}
+if (SerializationGuard::supportsSerializedValue(serialize($tooManyValues))) {
+    throw new RuntimeException('Serialized arrays over the validation value limit must fail preflight.');
+}
+$requestOverValueLimit = ['cmd' => 'set', 'key' => 'over-limit', 'value' => $tooManyValues];
+if (SerializationGuard::supportsRequest($requestOverValueLimit)
+    || SerializationGuard::supportsSerializedRequest(serialize($requestOverValueLimit))
+) {
+    throw new RuntimeException('Storage requests over the value limit must be rejected.');
+}
+$server->onMessage($connection, serialize([
+    'cmd' => 'set',
+    'key' => 'too-many-values',
+    'value' => $tooManyValues,
+]));
+if (isset($dataProperty->getValue($server)['too-many-values'])) {
+    throw new RuntimeException('Storage server must reject arrays over the validation value limit.');
+}
+$atDepthLimit = 'leaf';
+for ($depth = 0; $depth < 128; ++$depth) {
+    $atDepthLimit = [$atDepthLimit];
+}
+if (!SerializationGuard::supports($atDepthLimit)) {
+    throw new RuntimeException('Arrays within the validation depth limit must remain supported.');
+}
+$requestAtDepthLimit = ['cmd' => 'set', 'key' => 'at-depth-limit', 'value' => $atDepthLimit];
+if (!SerializationGuard::supportsRequest($requestAtDepthLimit)
+    || !SerializationGuard::supportsSerializedRequest(serialize($requestAtDepthLimit))
+) {
+    throw new RuntimeException('Storage requests within the validation depth limit must remain supported.');
+}
+$tooDeep = 'leaf';
+for ($depth = 0; $depth < 129; ++$depth) {
+    $tooDeep = [$tooDeep];
+}
+if (SerializationGuard::supports($tooDeep)) {
+    throw new RuntimeException('Arrays over the validation depth limit must be rejected.');
+}
+$requestOverDepthLimit = ['cmd' => 'set', 'key' => 'over-depth-limit', 'value' => $tooDeep];
+if (SerializationGuard::supportsRequest($requestOverDepthLimit)
+    || SerializationGuard::supportsSerializedRequest(serialize($requestOverDepthLimit))
+) {
+    throw new RuntimeException('Storage requests over the validation depth limit must be rejected.');
+}
+$server->onMessage($connection, serialize([
+    'cmd' => 'set',
+    'key' => 'too-deep',
+    'value' => $tooDeep,
+]));
+if (isset($dataProperty->getValue($server)['too-deep'])) {
+    throw new RuntimeException('Storage server must reject arrays over the validation depth limit.');
 }
 $server->onMessage($connection, serialize([
     'cmd' => 'set',
@@ -143,6 +264,23 @@ if (!StorageWakeupProbe::$wokeUp || !($trustedValue instanceof StorageWakeupProb
     throw new RuntimeException('Trusted-network opt-in must preserve object payload compatibility.');
 }
 
+$trustedWarnings = [];
+set_error_handler(static function (int $severity, string $message) use (&$trustedWarnings): bool {
+    $trustedWarnings[] = $message;
+
+    return true;
+});
+try {
+    $trustedWarningValue = SerializationGuard::decode(serialize(new StorageWakeupWarningProbe()), true);
+} finally {
+    restore_error_handler();
+}
+if (!($trustedWarningValue instanceof StorageWakeupWarningProbe)
+    || $trustedWarnings !== ['trusted wakeup warning']
+) {
+    throw new RuntimeException('Trusted object wakeup warnings must retain native unserialize behavior.');
+}
+
 [$clientSocket, $serverSocket] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
 $frameClient = new StorageClientProbe('127.0.0.1:8008');
 $rejectedObject = false;
@@ -153,6 +291,15 @@ try {
 }
 if (!$rejectedObject) {
     throw new RuntimeException('Storage client must reject object payloads without opt-in.');
+}
+$rejectedLargeArray = false;
+try {
+    $frameClient->writeFrame(['cmd' => 'set', 'key' => 'large', 'value' => $tooManyValues], $clientSocket);
+} catch (InvalidArgumentException) {
+    $rejectedLargeArray = true;
+}
+if (!$rejectedLargeArray) {
+    throw new RuntimeException('Storage client must reject arrays over the validation value limit.');
 }
 
 $request = ['cmd' => 'set', 'key' => 'frame', 'value' => 'payload'];
