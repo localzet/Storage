@@ -80,9 +80,33 @@ if ($serverProperty->getValue($server) !== false) {
 }
 $coreServerProperty = new ReflectionProperty($server, '_server');
 $coreServerProperty->setAccessible(true);
-if ($coreServerProperty->getValue($server)->getSocketName() !== 'frame://127.0.0.1:8008') {
+$coreServer = $coreServerProperty->getValue($server);
+if ($coreServer->getSocketName() !== 'frame://127.0.0.1:8008') {
     throw new RuntimeException('Storage server must bind to loopback by default.');
 }
+$connectionPair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+if ($connectionPair === false) {
+    throw new RuntimeException('Could not create a Storage connection test pair.');
+}
+$connectionProbe = new \localzet\Server\Connection\TcpConnection(
+    new \localzet\Server\Events\Select(),
+    $connectionPair[0]
+);
+($coreServer->onConnect)($connectionProbe);
+if ($connectionProbe->maxPackageSize !== Client::MAX_FRAME_SIZE + Client::FRAME_HEADER_SIZE
+    || $connectionProbe->maxSendBufferSize !== Client::MAX_FRAME_SIZE + Client::FRAME_HEADER_SIZE
+) {
+    throw new RuntimeException('Storage transport limits must include the complete frame header and payload.');
+}
+$maximumFrameLength = \localzet\Server\Protocols\Frame::input(
+    pack('N', Client::MAX_FRAME_SIZE),
+    $connectionProbe
+);
+if ($maximumFrameLength > $connectionProbe->maxPackageSize) {
+    throw new RuntimeException('Storage must accept the largest supported payload with its frame header.');
+}
+$connectionProbe->destroy();
+fclose($connectionPair[1]);
 $connection = new class {
     public array $sent = [];
     public function send($data): bool { $this->sent[] = $data; return true; }

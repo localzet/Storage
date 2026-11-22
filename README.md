@@ -8,9 +8,9 @@ A client/server shared in-memory data store for Localzet Server applications.
 
 Current release: `2.0.1`. The package targets Localzet Server 7 and fixes client framing for partial header/body reads and writes. Version 2 changes the default payload contract: object values and recursive arrays are rejected, while scalars and acyclic arrays remain supported. Version 2.0.1 validates bounded payload structure before decoding. Version 1 clients that send PHP objects must migrate before upgrading.
 
-The transport uses PHP serialization inside length-prefixed frames (maximum payload: 64 MiB). In the default safe mode, validation rejects values with more than 100,000 array entries across the whole value tree or more than 128 nested array levels. Keep its ports on a trusted network. The store is in-memory and process-local: it has no persistence, replication, client authentication or concurrency control.
+The transport uses PHP serialization inside length-prefixed frames (maximum payload: 64 MiB, plus a 4-byte header). Storage applies the complete-frame limit to each connection's receive and send buffers without changing Server's process-wide defaults. Budget memory for concurrent large frames and keep the listener on a trusted network. In the default safe mode, validation rejects values with more than 100,000 array entries across the whole value tree or more than 128 nested array levels. The store is in-memory and process-local: it has no persistence, replication, client authentication or concurrency control.
 
-The component targets Server 7.x. The server binds to loopback by default and has no client authentication; use it only on a trusted network and explicitly configure any non-loopback bind behind network access controls. When object support is disabled, the server and client reject PHP object values, including `__PHP_Incomplete_Class`, recursive arrays, arrays with over 100,000 total values and arrays deeper than 128 levels. For a trusted, isolated network, enable object serialization explicitly on both peers with `new Server($ip, $port, allowObjectSerialization: true)` and `new Client($servers, allowObjectSerialization: true)`. This opt-in restores legacy PHP serialization behavior and skips these validation limits; never enable it for untrusted clients.
+The component requires Server 7.2.3 or newer within the 7.x line. The server binds to loopback by default and has no client authentication; use it only on a trusted network and explicitly configure any non-loopback bind behind network access controls. When object support is disabled, the server and client reject PHP object values, including `__PHP_Incomplete_Class`, recursive arrays, arrays with over 100,000 total values and arrays deeper than 128 levels. For a trusted, isolated network, enable object serialization explicitly on both peers with `new Server($ip, $port, allowObjectSerialization: true)` and `new Client($servers, allowObjectSerialization: true)`. This opt-in restores legacy PHP serialization behavior and skips these validation limits; never enable it for untrusted clients.
 
 ### Migration from 1.x
 
@@ -19,7 +19,7 @@ Before upgrading, remove PHP objects and recursive arrays from stored values. If
 ## Dependencies
 
 - `php`: `^8.2`
-- `localzet/server`: `^7.0`
+- `localzet/server`: `^7.2.3`
 
 ## Installation
 

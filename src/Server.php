@@ -26,6 +26,7 @@
 namespace localzet\Storage;
 
 use localzet\Server as WebCore;
+use localzet\Server\Connection\TcpConnection;
 
 /**
  * Сервер глобального хранилища данных
@@ -56,6 +57,11 @@ class Server
         $server = new WebCore("frame://$ip:$port");
         $server->count = 1;
         $server->name = 'StorageServer';
+        $server->onConnect = static function (TcpConnection $connection): void {
+            $maxTransportFrameSize = Client::MAX_FRAME_SIZE + Client::FRAME_HEADER_SIZE;
+            $connection->maxPackageSize = $maxTransportFrameSize;
+            $connection->maxSendBufferSize = $maxTransportFrameSize;
+        };
         $server->onMessage = array($this, 'onMessage');
         $server->reloadable = false;
         $this->_server = $server;

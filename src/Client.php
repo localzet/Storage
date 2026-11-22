@@ -30,7 +30,8 @@ namespace localzet\Storage;
  */
 class Client
 {
-    private const MAX_FRAME_SIZE = 64 * 1024 * 1024;
+    public const MAX_FRAME_SIZE = 64 * 1024 * 1024;
+    public const FRAME_HEADER_SIZE = 4;
 
     /** @var bool */
     private bool $allowObjectSerialization;
