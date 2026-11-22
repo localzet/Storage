@@ -55,6 +55,13 @@ try {
     if ($client->get('integration-key') !== 'stored-value') {
         throw new RuntimeException('Storage get request returned an unexpected value.');
     }
+    $largeValue = str_repeat('x', \localzet\Server\Connection\TcpConnection::DEFAULT_MAX_PACKAGE_SIZE + 1);
+    if ($client->set('large-integration-key', $largeValue) !== true) {
+        throw new RuntimeException('Storage must accept payloads larger than the Server default package limit.');
+    }
+    if ($client->get('large-integration-key') !== $largeValue) {
+        throw new RuntimeException('Storage must return payloads larger than the Server default send buffer.');
+    }
     if ($client->add('integration-key', 'duplicate') !== false) {
         throw new RuntimeException('Storage add must reject an existing key.');
     }
